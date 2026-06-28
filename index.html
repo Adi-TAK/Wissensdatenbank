@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Wissensdatenbank</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial; background: #0f0f1a; color: white; padding: 30px; }
+    h1 { text-align: center; margin-bottom: 30px; color: #667eea; }
+    .card { background: #1a1a2e; border-radius: 15px; padding: 25px; max-width: 400px; margin: 0 auto 20px auto; }
+    input { width: 100%; padding: 12px; margin: 8px 0; background: #0f0f1a; border: 1px solid #2a2a4a; border-radius: 8px; color: white; font-size: 1rem; }
+    button { width: 100%; padding: 12px; margin: 8px 0; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: bold; }
+    .blau { background: #667eea; color: white; }
+    .gruen { background: #4CAF50; color: white; }
+    .rot { background: #f44336; color: white; }
+    .fehler { color: #f44336; margin-top: 10px; }
+    .erfolg { color: #4CAF50; margin-top: 10px; }
+    .link { color: #667eea; cursor: pointer; text-align: center; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <h1>🧠 Wissensdatenbank</h1>
+
+  <!-- Login -->
+  <div class="card" id="loginBereich">
+    <h2>🔐 Login</h2>
+    <input id="loginEmail" placeholder="Email" type="email" />
+    <input id="loginPasswort" placeholder="Passwort" type="password" />
+    <button class="blau" onclick="login()">Einloggen</button>
+    <p class="fehler" id="loginFehler"></p>
+    <p class="link" onclick="wechseln('register')">Noch kein Konto? Registrieren →</p>
+  </div>
+
+  <!-- Registrieren -->
+  <div class="card" id="registerBereich" style="display:none">
+    <h2>📝 Registrieren</h2>
+    <input id="regName" placeholder="Dein Name" />
+    <input id="regEmail" placeholder="Email" type="email" />
+    <input id="regPasswort" placeholder="Passwort" type="password" />
+    <button class="gruen" onclick="registrieren()">Registrieren</button>
+    <p class="fehler" id="regFehler"></p>
+    <p class="erfolg" id="regErfolg"></p>
+    <p class="link" onclick="wechseln('login')">← Zurück zum Login</p>
+  </div>
+
+  <!-- Hauptseite -->
+  <div id="hauptseite" style="display:none">
+    <div class="card">
+      <h2>👋 Hallo, <span id="userName"></span>!</h2>
+      <button class="rot" onclick="logout()">Logout</button>
+    </div>
+
+    <div class="card">
+      <h2>➕ Neues Wissen teilen</h2>
+      <input id="titel" placeholder="Titel" />
+      <input id="kategorie" placeholder="Kategorie" />
+      <input id="inhalt" placeholder="Inhalt..." />
+      <button class="gruen" onclick="speichern()">💾 Speichern</button>
+    </div>
+
+    <div class="card">
+      <input id="suche" placeholder="🔍 Suche..." oninput="laden()" />
+    </div>
+
+    <div class="card" id="adminPanel" style="display:none">
+      <h2>👑 Admin Panel</h2>
+      <h3 style="color:#aaa; margin-top:10px;">Alle User:</h3>
+      <div id="userListe"></div>
+    </div>
+
+    <div id="liste"></div>
+  </div>
+
+  <script>
+    async function eintragLoeschen(id) {
+  if (!confirm('Eintrag wirklich löschen?')) return;
+  await fetch(`/api/wissen/${id}`, { method: 'DELETE' });
+  laden();
+}
+    function wechseln(seite) {
+      document.getElementById('loginBereich').style.display = seite === 'login' ? 'block' : 'none';
+      document.getElementById('registerBereich').style.display = seite === 'register' ? 'block' : 'none';
+    }
+
+    async function registrieren() {
+      const name = document.getElementById('regName').value;
+      const email = document.getElementById('regEmail').value;
+      const passwort = document.getElementById('regPasswort').value;
+      const res = await fetch('/api/registrieren', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, passwort })
+      });
+      const daten = await res.json();
+      if (daten.fehler) {
+        document.getElementById('regFehler').textContent = daten.fehler;
+      } else {
+        document.getElementById('regErfolg').textContent = '✅ Erfolgreich! Bitte einloggen.';
+        setTimeout(() => wechseln('login'), 1500);
+      }
+    }
+
+    async function login() {
+      const email = document.getElementById('loginEmail').value;
+      const passwort = document.getElementById('loginPasswort').value;
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, passwort })
+      });
+      const daten = await res.json();
+      if (daten.fehler) {
+        document.getElementById('loginFehler').textContent = daten.fehler;
+      } else {
+        eingeloggt(daten.name, daten.isAdmin);
+      }
+    }
+
+    async function logout() {
+      await fetch('/api/logout', { method: 'POST' });
+      document.getElementById('hauptseite').style.display = 'none';
+      document.getElementById('loginBereich').style.display = 'block';
+    }
+
+    function eingeloggt(name, isAdmin) {
+      document.getElementById('userName').textContent = name + (isAdmin ? ' 👑' : '');
+      document.getElementById('loginBereich').style.display = 'none';
+      document.getElementById('registerBereich').style.display = 'none';
+      document.getElementById('hauptseite').style.display = 'block';
+      if (isAdmin) {
+        document.getElementById('adminPanel').style.display = 'block';
+        adminLaden();
+      }
+      laden();
+    }
+
+    async function speichern() {
+      const titel = document.getElementById('titel').value;
+      const inhalt = document.getElementById('inhalt').value;
+      const kategorie = document.getElementById('kategorie').value;
+      if (!titel || !inhalt) return alert('Bitte Titel und Inhalt ausfüllen!');
+      await fetch('/api/wissen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ titel, inhalt, kategorie })
+      });
+      document.getElementById('titel').value = '';
+      document.getElementById('inhalt').value = '';
+      document.getElementById('kategorie').value = '';
+      laden();
+    }
+
+    async function laden() {
+      const suche = document.getElementById('suche') ? document.getElementById('suche').value : '';
+      const res = await fetch(`/api/wissen?suche=${encodeURIComponent(suche)}`);
+      const daten = await res.json();
+      document.getElementById('liste').innerHTML = daten.length === 0
+        ? '<p style="color:#666; text-align:center; margin-top:20px;">Noch keine Einträge.</p>'
+        : daten.map(e => `
+          <div class="card">
+            <h3 style="color:#667eea;">${e.titel}</h3>
+            ${e.kategorie ? `<span style="background:#2a2a4a; padding:4px 10px; border-radius:20px; font-size:0.8rem;">📁 ${e.kategorie}</span>` : ''}
+            <p style="margin-top:10px; color:#aaa;">${e.inhalt}</p>
+            <button class="rot" style="width:auto; padding:5px 12px; margin-top:10px; font-size:0.8rem;" onclick="eintragLoeschen(${e.id})">🗑️ Löschen</button>
+          </div>
+        `).join('');
+    }
+
+    async function adminLaden() {
+      const res = await fetch('/api/admin/users');
+      const users = await res.json();
+      document.getElementById('userListe').innerHTML = users.map(u => `
+        <div style="background:#0f0f1a; padding:10px; border-radius:8px; margin:8px 0; display:flex; justify-content:space-between; align-items:center;">
+          <span>👤 ${u.name} – ${u.email} ${u.isAdmin ? '👑' : ''}</span>
+          ${!u.isAdmin ? `<button class="rot" style="width:auto; padding:5px 10px;" onclick="userLoeschen(${u.id})">🗑️</button>` : ''}
+        </div>
+      `).join('');
+    }
+
+    async function userLoeschen(id) {
+      if (!confirm('User wirklich löschen?')) return;
+      await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+      adminLaden();
+    }
+
+    fetch('/api/ich').then(r => r.json()).then(d => {
+      if (d.name) eingeloggt(d.name, d.isAdmin);
+    }).catch(() => {});
+  </script>
+
+</body>
+</html>
