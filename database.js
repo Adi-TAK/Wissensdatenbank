@@ -1,27 +1,25 @@
-const sqlite3 = require('sqlite3').verbose();
+const Database = require('better-sqlite3');
 
-const db = new sqlite3.Database('wissen.db', (err) => {
-  if (err) console.error(err.message);
-  else console.log('Datenbank verbunden!');
-});
+const db = new Database('wissen.db');
 
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS users (
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
     passwort TEXT NOT NULL,
+    isAdmin INTEGER DEFAULT 0,
     erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
+  );
 
-  db.run(`CREATE TABLE IF NOT EXISTS wissen (
+  CREATE TABLE IF NOT EXISTS wissen (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     titel TEXT NOT NULL,
     inhalt TEXT NOT NULL,
     kategorie TEXT,
     user_id INTEGER,
     erstellt_am DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-});
+  );
+`);
 
 module.exports = db;
